@@ -1,0 +1,153 @@
+###############################################################################################################
+###
+###Require packages to run analysis
+require(data.table)
+require(SGP)
+require(reshape)
+###############################################################################################################
+
+
+
+###############################################################################################################
+###
+###Read in Long Data
+Nevada_Data_LONG <- read.table("C:/NLDS/R-Code Input Files/2013/Final/LongFile_Final03.txt", sep="|", header=TRUE, comment.char="", quote="")
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Clean up data for SGP and check for duplicates
+names(Nevada_Data_LONG)[2:3] <- c("STATE_UNIQUE_ID", "LOCAL_UNIQUE_ID")
+Nevada_Data_LONG$ID <- as.factor(Nevada_Data_LONG$ID)
+levels(Nevada_Data_LONG$LAST_NAME) <- sapply(levels(Nevada_Data_LONG$LAST_NAME), capwords)
+levels(Nevada_Data_LONG$FIRST_NAME) <- sapply(levels(Nevada_Data_LONG$FIRST_NAME), capwords)
+
+Nevada_Data_LONG$ACHIEVEMENT_LEVEL <- ordered(Nevada_Data_LONG$ACHIEVEMENT_LEVEL, levels=c("Emergent/Developing", "Approaches Standard", "Meets Standard", "Exceeds Standard"))
+Nevada_Data_LONG$EMH_LEVEL <- NULL
+
+Nevada_Data_LONG$SCHOOL_ENROLLMENT_STATUS <- as.factor(Nevada_Data_LONG$SCHOOL_ENROLLMENT_STATUS)
+levels(Nevada_Data_LONG$SCHOOL_ENROLLMENT_STATUS) <- c("Enrolled School: No", "Enrolled School: Yes")
+
+Nevada_Data_LONG$DISTRICT_ENROLLMENT_STATUS <- as.factor(Nevada_Data_LONG$DISTRICT_ENROLLMENT_STATUS)
+levels(Nevada_Data_LONG$DISTRICT_ENROLLMENT_STATUS) <- c("Enrolled District: No", "Enrolled District: Yes")
+
+Nevada_Data_LONG$STATE_ENROLLMENT_STATUS <- as.factor(Nevada_Data_LONG$STATE_ENROLLMENT_STATUS)
+levels(Nevada_Data_LONG$STATE_ENROLLMENT_STATUS) <- c("Enrolled State: No", "Enrolled State: Yes")
+
+Nevada_Data_LONG$VALID_CASE <- factor(1, levels=1:2, labels=c("VALID_CASE", "INVALID_CASE"))
+Nevada_Data_LONG <- as.data.table(Nevada_Data_LONG)
+setkeyv(Nevada_Data_LONG, c("CONTENT_AREA", "YEAR", "ID"))
+summary(duplicated(Nevada_Data_LONG))
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Remove duplicates (this piece provided by Katherine)
+mathdups	<- Nevada_Data_LONG[duplicated(Nevada_Data_LONG)==TRUE & Nevada_Data_LONG$CONTENT_AREA=="MATHEMATICS",]
+nomathdups	<- Nevada_Data_LONG[Nevada_Data_LONG$CONTENT_AREA=="MATHEMATICS" & !Nevada_Data_LONG$ID %in% unique(mathdups$ID),]
+readdups	<- Nevada_Data_LONG[duplicated(Nevada_Data_LONG)==TRUE & Nevada_Data_LONG$CONTENT_AREA=="READING",]
+noreaddups 	<- Nevada_Data_LONG[Nevada_Data_LONG$CONTENT_AREA=="READING" & !Nevada_Data_LONG$ID %in% unique(readdups$ID),]
+long1		<- rbind(nomathdups,noreaddups)
+summary(duplicated(long1))
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Format Long Data into data table
+Nevada_SGPL <- as.data.table(long1)
+sapply(Nevada_SGPL, class)
+sapply(Nevada_SGPL, function(x) head(levels(x)))
+###############################################################################################################
+
+
+
+###############################################################################################################
+###
+###Load 2012 Object (Load previously calculated 2013 Object for Sept update)
+load(file="C:/NLDS/RObject1213/Final/Nevada_SGP2013SeptUpdate.Rdata")
+sapply(Nevada_SGP@Data, class)
+sapply(Nevada_SGP@Data, function(x) head(levels(x)))
+###############################################################################################################
+
+
+
+###############################################################################################################
+###
+###Append new data to old
+Nevada_SGPL <- prepareSGP(Nevada_SGPL)
+
+Nevada_SGPL@Data$STATE_UNIQUE_ID <-as.character(Nevada_SGPL@Data$STATE_UNIQUE_ID)
+class(Nevada_SGP@Data$STATE_UNIQUE_ID)
+
+Nevada_SGP@Data <- as.data.table(rbind.fill(Nevada_SGP@Data,Nevada_SGPL@Data))
+new.year <- sort(unique(Nevada_SGPL@Data$YEAR))
+table(new.year)
+table(Nevada_SGP@Data$YEAR)
+save(Nevada_SGP, file="C:/NLDS/RObject1213/Nevada_SGP2013.Rdata")
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Delete previous results
+Nevada_SGP@SGP$Goodness_of_Fit[grep("2012_2013", names(Nevada_SGP@SGP$Goodness_of_Fit))] <- NULL
+Nevada_SGP@SGP$SGPercentiles[grep("2012_2013", names(Nevada_SGP@SGP$SGPercentiles))] <- NULL
+Nevada_SGP@SGP$SGProjections[grep("2012_2013", names(Nevada_SGP@SGP$SGProjections))] <- NULL
+Nevada_SGP@SGP$Simulated_SGPs <- NULL
+Nevada_SGP@SGP$Summary <- NULL
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Analyze the data for 2012-2013
+Nevada_SGP <- prepareSGP(Nevada_SGP)
+Nevada_SGP <- analyzeSGP(Nevada_SGP,years=new.year, 
+		  simulate.sgps=FALSE,
+		  sgp.use.my.coefficient.matrices=TRUE)
+save(Nevada_SGP, file="C:/NLDS/RObject1213/Nevada_SGP2013.Rdata")
+###############################################################################################################
+
+
+
+###############################################################################################################
+###
+###Combine the data
+Nevada_SGP <- combineSGP(Nevada_SGP)
+save(Nevada_SGP, file="C:/NLDS/RObject1213/Nevada_SGP2013.Rdata")
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Output the data
+outputSGP(
+        Nevada_SGP,
+        output.type=c("LONG_Data", "WIDE_Data"),
+	  outputSGP.directory="C:/NLDS/R-Code Output Files")
+###############################################################################################################
+
+
+
+
+###############################################################################################################
+###
+###Summarize the data
+Nevada_SGP <- summarizeSGP(Nevada_SGP)
+save(Nevada_SGP, file="C:/NLDS/RObject1213/Nevada_SGP2013.Rdata")
+###############################################################################################################
